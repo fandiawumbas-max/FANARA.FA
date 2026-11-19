@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin Booking FANARA</title>
+<style>
+  :root { --bg:#f4f1ec; --card:#fff; --ink:#1f1a17; --muted:#6f655d; --line:#e4ddd3; --acc:#8f2c3f; --ok:#1b7a4b; --okbg:#dff3e8; --bad:#b3261e; --badbg:#fbe3e1; --warn:#8a5a00; --warnbg:#fdf0cf; --gray:#5f6368; --graybg:#ececec; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16120f; --card:#211b17; --ink:#f3ece6; --muted:#b3a79d; --line:#3a312a; --acc:#f08aa0; --ok:#6fd3a0; --okbg:#173326; --bad:#ff9a92; --badbg:#3d1a17; --warn:#f4c76a; --warnbg:#3a2d10; --gray:#c9c9c9; --graybg:#2c2c2c; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:720px; margin:0 auto; padding:16px 16px 60px; }
+  h1 { font-size:1.35rem; margin:6px 0 2px; }
+  .sub { color:var(--muted); margin:0 0 14px; font-size:.92rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  label { display:block; font-weight:600; font-size:.88rem; margin-bottom:6px; }
+  input[type=text], input[type=password], input[type=number], input[type=search] { width:100%; font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  button { font:inherit; font-weight:600; cursor:pointer; border:0; border-radius:10px; padding:9px 13px; background:var(--acc); color:#fff; }
+  button.ghost { background:transparent; color:var(--acc); border:1.5px solid var(--acc); }
+  button.red { background:transparent; color:var(--bad); border:1.5px solid var(--bad); }
+  button.green { background:var(--ok); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .chip { background:var(--card); color:var(--ink); border:1.5px solid var(--line); padding:7px 12px; border-radius:999px; font-size:.9rem; }
+  .chip.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .top { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:baseline; }
+  .kode { font:700 1rem ui-monospace,Menlo,Consolas,monospace; letter-spacing:.04em; }
+  .time { color:var(--muted); font-size:.82rem; }
+  .nm { font-weight:700; font-size:1.05rem; margin-top:4px; }
+  .row { margin-top:4px; font-size:.93rem; }
+  .muted { color:var(--muted); }
+  .badges { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .b { font-size:.78rem; font-weight:800; padding:3px 9px; border-radius:999px; letter-spacing:.02em; }
+  .b.baru { background:var(--warnbg); color:var(--warn); }
+  .b.konf { background:var(--okbg); color:var(--ok); }
+  .b.batal, .b.bentrok { background:var(--graybg); color:var(--gray); }
+  .b.lunas { background:var(--okbg); color:var(--ok); }
+  .b.belum { background:var(--badbg); color:var(--bad); }
+  .money { margin-top:8px; padding:8px 10px; background:var(--bg); border-radius:10px; font-size:.92rem; display:flex; gap:14px; flex-wrap:wrap; }
+  .acts { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .pay { display:flex; gap:8px; margin-top:10px; }
+  .pay input { flex:1; }
+  .msg { color:var(--bad); font-size:.92rem; margin:8px 0 0; }
+  .toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:#222; color:#fff; padding:10px 16px; border-radius:999px; font-size:.9rem; opacity:0; pointer-events:none; transition:opacity .2s; max-width:90vw; text-align:center; }
+  .toast.show { opacity:1; }
+  .hidden { display:none; }
+  a { color:var(--acc); }
+</style>
+<script src="config.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <h1>Admin Booking FANARA</h1>
+  <p class="sub">Lihat booking, konfirmasi, catat pembayaran, dan batalkan.</p>
+
+  <div class="card" id="login">
+    <label for="key">Kata sandi admin</label>
+    <input type="password" id="key" autocomplete="current-password">
+    <div class="bar" style="margin:10px 0 0"><button id="go">Masuk</button></div>
+    <p class="msg" id="lmsg"></p>
+  </div>
+
+  <div id="main" class="hidden">
+    <div class="bar" id="chips"></div>
+    <div class="bar">
+      <input type="search" id="q" placeholder="Cari nama, kode, atau nomor HP" style="flex:1;min-width:180px">
+      <button class="ghost" id="reload">Muat ulang</button>
+      <button class="ghost" id="out">Keluar</button>
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var URL_ = String(window.FANARA_SHEET_URL || '').trim();
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY = '', ROWS = [], FILTER = 'butuh';
+
+  function toast(t) {
+    var e = $('toast'); e.textContent = t; e.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(function () { e.classList.remove('show'); }, 2200);
+  }
+  function rp(n) { return 'Rp' + Math.round(n || 0).toLocaleString('id-ID'); }
+  function api(params) {
+    var q = Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
+    return fetch(URL_ + '?' + q + '&t=' + Date.now()).then(function (r) { return r.json(); });
+  }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function login() {
+    var m = $('lmsg');
+    if (!URL_) { m.textContent = 'Alamat Google Sheets belum diisi di config.js.'; return; }
+    var k = $('key').value;
+    if (!k) { m.textContent = 'Isi kata sandi dulu.'; return; }
+    m.textContent = 'Memeriksa...'; $('go').disabled = true;
+    api({ a: 'list', key: k }).then(function (j) {
+      $('go').disabled = false;
+      if (j && j.ok) {
+        KEY = k; try { sessionStorage.setItem('fanara-key', k); } catch (e) {}
+        m.textContent = ''; $('login').classList.add('hidden'); $('main').classList.remove('hidden');
+        ROWS = j.rows; draw();
+      } else if (j && j.auth === 'belum') {
+        m.textContent = 'Kata sandi admin belum diatur di Code.gs (baris ADMIN_KEY).';
+      } else {
+        m.textContent = 'Kata sandi salah.';
+      }
+    }).catch(function () { $('go').disabled = false; m.textContent = 'Tidak bisa terhubung. Coba lagi.'; });
+  }
+
+  function load() {
+    return api({ a: 'list', key: KEY }).then(function (j) {
+      if (j && j.ok) { ROWS = j.rows; draw(); }
+      else toast('Gagal memuat. Masuk ulang.');
+    }).catch(function () { toast('Tidak bisa terhubung.'); });
+  }
+
+  function aksi(r, f, v, ok) {
+    api({ a: 'set', key: KEY, row: r.row, kode: r.kode, f: f, v: v == null ? '' : v }).then(function (j) {
+      if (j && j.ok) { toast(ok); load(); }
+      else toast((j && j.msg) || 'Gagal. Coba lagi.');
+    }).catch(function () { toast('Tidak bisa terhubung.'); });
+  }
+
+  function waLink(hp) {
+    var d = String(hp || '').replace(/\D/g, '');
+    if (d.indexOf('0') === 0) d = '62' + d.slice(1);
+    return 'https://wa.me/' + d;
+  }
+
+  function filtered() {
+    var q = $('q').value.trim().toLowerCase();
+    return ROWS.filter(function (r) {
+      var aktif = r.status !== 'Batal' && r.status !== 'Bentrok';
+      if (FILTER === 'butuh' && !(aktif && r.bayar === 'BELUM LUNAS')) return false;
+      if (FILTER === 'aktif' && !aktif) return false;
+      if (FILTER === 'lunas' && !(aktif && r.bayar === 'LUNAS')) return false;
+      if (FILTER === 'batal' && aktif) return false;
+      if (!q) return true;
+      return (r.nama + ' ' + r.kode + ' ' + r.hp + ' ' + r.paket).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  function chips() {
+    var c = $('chips'); c.innerHTML = '';
+    [['butuh', 'Belum lunas'], ['aktif', 'Semua aktif'], ['lunas', 'Lunas'], ['batal', 'Batal / bentrok'], ['semua', 'Semua']].forEach(function (x) {
+      var b = el('button', 'chip' + (FILTER === x[0] ? ' on' : ''), x[1]);
+      b.onclick = function () { FILTER = x[0]; draw(); };
+      c.appendChild(b);
+    });
+  }
+
+  function draw() {
+    chips();
+    var L = $('list'); L.innerHTML = '';
+    var rows = filtered();
+    if (!rows.length) { L.appendChild(el('p', 'sub', 'Tidak ada booking di daftar ini.')); return; }
+    rows.forEach(function (r) {
+      var card = el('div', 'card');
+      var top = el('div', 'top');
+      top.appendChild(el('span', 'kode', r.kode || '(tanpa kode)'));
+      top.appendChild(el('span', 'time', r.waktu));
+      card.appendChild(top);
+      card.appendChild(el('div', 'nm', r.nama));
+      var hp = el('div', 'row');
+      var a = el('a', null, r.hp + '  (chat WhatsApp)'); a.href = waLink(r.hp); a.target = '_blank'; a.rel = 'noopener';
+      hp.appendChild(a); card.appendChild(hp);
+      card.appendChild(el('div', 'row', r.paket + (r.tambahan ? ' + ' + r.tambahan : '')));
+      card.appendChild(el('div', 'row muted', r.tanggal));
+
+      var bd = el('div', 'badges');
+      var cls = r.status === 'Konfirmasi' ? 'konf' : r.status === 'Batal' ? 'batal' : r.status === 'Bentrok' ? 'bentrok' : 'baru';
+      bd.appendChild(el('span', 'b ' + cls, r.status.toUpperCase()));
+      if (r.status !== 'Batal') bd.appendChild(el('span', 'b ' + (r.bayar === 'LUNAS' ? 'lunas' : 'belum'), r.bayar));
+      card.appendChild(bd);
+
+      if (r.status !== 'Batal') {
+        var m = el('div', 'money');
+        m.appendChild(el('span', null, 'Total: ' + (r.total > 0 ? rp(r.total) : 'belum diketahui')));
+        m.appendChild(el('span', null, 'Dibayar: ' + rp(r.dibayar)));
+        if (r.total > 0) m.appendChild(el('span', null, 'Sisa: ' + rp(Math.max(0, r.total - r.dibayar))));
+        card.appendChild(m);
+
+        var pay = el('div', 'pay');
+        var inp = el('input'); inp.type = 'number'; inp.min = '0'; inp.inputMode = 'numeric'; inp.placeholder = 'Jumlah dibayar (Rp)';
+        var sv = el('button', 'ghost', 'Simpan pembayaran');
+        sv.onclick = function () {
+          if (inp.value === '' || Number(inp.value) < 0) { toast('Isi jumlah dibayar dulu.'); return; }
+          aksi(r, 'dibayar', inp.value, 'Pembayaran disimpan');
+        };
+        pay.appendChild(inp); pay.appendChild(sv); card.appendChild(pay);
+      }
+
+      var ac = el('div', 'acts');
+      if (r.status === 'Batal' || r.status === 'Bentrok') {
+        if (r.status === 'Batal') {
+          var pu = el('button', 'ghost', 'Pulihkan booking');
+          pu.onclick = function () { if (confirm('Pulihkan booking ' + r.nama + '? Tanggalnya akan terblokir lagi.')) aksi(r, 'status', 'Baru', 'Booking dipulihkan'); };
+          ac.appendChild(pu);
+        }
+      } else {
+        if (r.status === 'Baru') {
+          var kf = el('button', 'green', 'Konfirmasi');
+          kf.onclick = function () { aksi(r, 'status', 'Konfirmasi', 'Booking dikonfirmasi'); };
+          ac.appendChild(kf);
+        }
+        if (r.bayar !== 'LUNAS') {
+          var lu = el('button', 'green', 'Tandai lunas');
+          lu.onclick = function () { aksi(r, 'lunas', '', 'Ditandai lunas'); };
+          ac.appendChild(lu);
+        }
+        var bt = el('button', 'red', 'Batalkan');
+        bt.onclick = function () { if (confirm('Batalkan booking ' + r.nama + '? Tanggalnya akan dibuka kembali.')) aksi(r, 'status', 'Batal', 'Booking dibatalkan'); };
+        ac.appendChild(bt);
+      }
+      if (ac.children.length) card.appendChild(ac);
+      L.appendChild(card);
+    });
+  }
+
+  $('go').onclick = login;
+  $('key').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(); });
+  $('reload').onclick = function () { load().then(function () { toast('Diperbarui'); }); };
+  $('out').onclick = function () { try { sessionStorage.removeItem('fanara-key'); } catch (e) {} KEY = ''; ROWS = []; $('main').classList.add('hidden'); $('login').classList.remove('hidden'); $('key').value = ''; };
+  $('q').addEventListener('input', draw);
+  try { var k0 = sessionStorage.getItem('fanara-key'); if (k0) { $('key').value = k0; login(); } } catch (e) {}
+})();
+</script>
+</body>
+</html>
